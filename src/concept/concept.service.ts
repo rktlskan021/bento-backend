@@ -1,0 +1,170 @@
+import { Injectable, NotFoundException } from '@nestjs/common';
+import { getBaseDB } from '../query-builder/base';
+import {
+  ConceptResponseDto,
+  ConceptSearchResponseDto,
+  DomainType,
+} from './dto/concept.dto';
+
+@Injectable()
+export class ConceptService {
+  async searchConcepts(
+    query?: string,
+    source_code?: string,
+    source_concept_id?: string,
+    target_concept_id?: string,
+    target_concept_name?: string,
+    page: number = 0,
+    limit: number = 100,
+    domain?: DomainType,
+  ): Promise<ConceptSearchResponseDto> {
+    const offset = page * limit;
+    
+    query = query?.trim() || '';
+    source_code = source_code?.trim() || '';
+    source_concept_id = source_concept_id?.trim() || '';
+    target_concept_id = target_concept_id?.trim() || '';
+    target_concept_name = target_concept_name?.trim() || '';
+
+    const isInteger = !isNaN(Number(query));
+
+    let conceptQuery = getBaseDB().selectFrom('snuh_concept').selectAll();
+
+    if (domain) {
+      conceptQuery = conceptQuery.where('domain_id', '=', domain);
+    }
+
+    // 검색어가 있는 경우에만 검색 조건 추가
+    if (query) {
+      if(isInteger){
+        conceptQuery = conceptQuery.where((eb) => eb.or([
+          eb('source_concept_id', '=', ({eb}) => eb.val(query)),
+          eb('target_concept_id', '=', ({eb}) => eb.val(query)),
+        ]));
+      } else{
+        conceptQuery = conceptQuery.where((eb) => eb.or([
+          eb('source_code', 'ilike', `%${query.replaceAll('%', '%%')}%`),
+          eb('target_concept_name', 'ilike', `%${query.replaceAll('%', '%%')}%`),
+        ]));
+      }
+    }
+
+    // 2차 필터링
+    if(source_code){
+      conceptQuery = conceptQuery.where(
+        'source_code',
+        'ilike',
+        `%${source_code.replaceAll('%', '%%')}%`
+      )
+    }
+    if(source_concept_id){
+      conceptQuery = conceptQuery.where(
+        'source_concept_id',
+        '=',
+        ({eb}) => eb.val(source_concept_id)
+      )
+    }
+    if(target_concept_id){
+      conceptQuery = conceptQuery.where(
+        'target_concept_id',
+        'ilike',
+        ({eb}) => eb.val(target_concept_id)
+      )
+    }
+    if(target_concept_name){
+      conceptQuery = conceptQuery.where(
+        'target_concept_name',
+        'ilike',
+        `%${target_concept_name.replaceAll('%', '%%')}%`
+      )
+    }
+
+    // 총 결과 수를 계산하기 위한 쿼리
+    let countQuery = getBaseDB()
+      .selectFrom('snuh_concept')
+      .select(({ fn }) => [fn.count('source_code').as('total')]);
+
+    if (domain) {
+      countQuery = countQuery.where('domain_id', '=', domain);
+    }
+
+    // 검색어가 있는 경우에만 검색 조건 추가
+    if (query) {
+      if(isInteger){
+        conceptQuery = conceptQuery.where((eb) => eb.or([
+          eb('source_concept_id', '=', ({eb}) => eb.val(query)),
+          eb('target_concept_id', '=', ({eb}) => eb.val(query)),
+        ]));
+      } else{
+        conceptQuery = conceptQuery.where((eb) => eb.or([
+          eb('source_code', 'ilike', `%${query.replaceAll('%', '%%')}%`),
+          eb('target_concept_name', 'ilike', `%${query.replaceAll('%', '%%')}%`),
+        ]));
+      }
+    }
+
+    // 2차 필터링
+    if(source_code){
+      countQuery = countQuery.where(
+        'source_code',
+        'ilike',
+        `%${source_code.replaceAll('%', '%%')}%`
+      )
+    }
+    if(source_concept_id){
+      countQuery = countQuery.where(
+        'source_concept_id',
+        '=',
+        ({eb}) => eb.val(source_concept_id)
+      )
+    }
+    if(target_concept_id){
+      countQuery = countQuery.where(
+        'target_concept_id',
+        'ilike',
+        ({eb}) => eb.val(target_concept_id)
+      )
+    }
+    if(target_concept_name){
+      countQuery = countQuery.where(
+        'target_concept_name',
+        'ilike',
+        `%${target_concept_name.replaceAll('%', '%%')}%`
+      )
+    }
+
+    // 두 쿼리를 병렬로 실행
+    const [concepts, countResult] = await Promise.all([
+      conceptQuery.limit(Number(limit)).offset(offset).orderBy('source_code').execute(),
+      countQuery.executeTakeFirst(),
+    ]);
+
+    return {
+      concepts: concepts.map((concept) => ({
+        source_code: concept.source_code,
+        source_concept_id: concept.source_concept_id,
+        target_concept_id: concept.target_concept_id,
+        target_concept_name: concept.target_concept_name,
+        domain_id: concept.domain_id,
+        vocabulary_id: concept.source_vocabulary_id,
+      })),
+      total: Number(countResult?.total || 0),
+      page: page,
+      limit: limit,
+    };
+  }
+
+  // async getConceptById(conceptId: string): Promise<ConceptResponseDto> {
+  //   const concept = await getBaseDB()
+  //     .selectFrom('snuh_concept')
+  //     .selectAll()
+  //     .where('concept_id', '=', conceptId)
+  //     .executeTakeFirst();
+
+  //   if (!concept) {
+  //     throw new NotFoundException(`Concept with ID ${conceptId} not found`);
+  //   }
+
+  //   return concept;
+  // }
+}

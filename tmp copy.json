@@ -1,0 +1,39 @@
+{
+  "name": "Cohort name 2",
+  "description": "Cohort description 2",
+  "cohortDefinition": {
+    "initialGroup": {
+      "containers": [
+        {
+          "name": "Group A",
+          "filters": [
+            {
+              "type": "condition_occurrence",
+              "conceptset": "4047888",
+              "age": {
+                "neq": [20]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    "comparisonGroup": {
+      "containers": [
+        {
+          "name": "Group B",
+          "filters": [
+            {
+              "type": "condition_occurrence",
+              "conceptset": "4047888",
+              "age": {
+                "neq": [20]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "temporary": true
+}

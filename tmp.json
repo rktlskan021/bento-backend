@@ -1,0 +1,54 @@
+{
+  "name": "Cohort name 2",
+  "description": "Cohort description 2",
+  "cohortDefinition": {
+    "conceptsets": [
+        {
+            "conceptset_id":1,
+            "name": "컨셉세트 1",
+            "items": [
+                {
+                    "source_code": "A1O4H1",
+                    "source_concept_id": "0",
+                    "source_vocabulary_id": "SNUH generated",
+                    "source_code_description": "Amlodipine/Olmesartan/Hydrochlorothiazide 10mg/40mg/12.5mg tab",
+                    "target_concept_id": "42386654",
+                    "target_vocabulary_id": "EDI",
+                    "target_concept_name": "amlodipine besylate (as amlodipine 10mg),hydrochlorothiazide 12.5mg,olmesartan medoxomil 40mg",
+                    "domain_id": "Drug",
+                    "invaild_reason": "",
+                    "isExcluded": false
+                }
+            ]
+        }
+    ],
+    "initialGroup": {
+      "containers": [
+        {
+          "name": "Measurement",
+          "filters": [
+            {
+              "type": "condition_era",
+              
+              
+            }
+          ]
+        }
+      ]
+    },
+    "comparisonGroup": {
+      "containers": [
+        {
+          "name": "Male",
+          "filters": [
+            {
+              "type": "demographic",
+              "gender": "8507"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "temporary": false
+}
