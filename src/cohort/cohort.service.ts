@@ -13,6 +13,7 @@ import {
   CohortListResponse,
   CohortPersonsResponse,
   CohortDetailResponse,
+  IsCheckCohortNameResponse,
 } from './dto/cohort.dto';
 import { string } from 'sql-formatter/dist/cjs/lexer/regexFactory';
 
@@ -31,7 +32,7 @@ export class CohortService {
     let cohortsQuery = getBaseDB()
       .selectFrom('snuh_cohort')
       .selectAll()
-      .limit(limit)
+      .limit(Number(limit))
       .offset(offset)
       .orderBy('updated_at', 'desc');
 
@@ -564,5 +565,15 @@ export class CohortService {
     return {
       message: 'Cohort successfully deleted.',
     };
+  }
+
+  async isCohortNameDuplicate(cohortName: string): Promise<boolean> {
+    const cohort = await getBaseDB()
+      .selectFrom('snuh_cohort')
+      .selectAll()
+      .where('name', 'like', cohortName)
+      .executeTakeFirst();
+
+    return !!cohort;
   }
 }

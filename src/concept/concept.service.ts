@@ -11,9 +11,10 @@ export class ConceptService {
   async searchConcepts(
     query?: string,
     source_code?: string,
-    source_concept_id?: string,
+    source_code_description?: string,
     target_concept_id?: string,
     target_concept_name?: string,
+    vocabulary_id?: string,
     page: number = 0,
     limit: number = 100,
     domain?: DomainType,
@@ -22,9 +23,10 @@ export class ConceptService {
     
     query = query?.trim() || '';
     source_code = source_code?.trim() || '';
-    source_concept_id = source_concept_id?.trim() || '';
+    source_code_description = source_code_description?.trim() || '';
     target_concept_id = target_concept_id?.trim() || '';
     target_concept_name = target_concept_name?.trim() || '';
+    vocabulary_id = vocabulary_id?.trim() || '';
 
     const isInteger = !isNaN(Number(query));
 
@@ -38,13 +40,13 @@ export class ConceptService {
     if (query) {
       if(isInteger){
         conceptQuery = conceptQuery.where((eb) => eb.or([
-          eb('source_concept_id', '=', ({eb}) => eb.val(query)),
           eb('target_concept_id', '=', ({eb}) => eb.val(query)),
         ]));
       } else{
         conceptQuery = conceptQuery.where((eb) => eb.or([
           eb('source_code', 'ilike', `%${query.replaceAll('%', '%%')}%`),
           eb('target_concept_name', 'ilike', `%${query.replaceAll('%', '%%')}%`),
+          eb('source_code_description', 'ilike', `%${query.replaceAll('%', '%%')}%`),
         ]));
       }
     }
@@ -57,11 +59,11 @@ export class ConceptService {
         `%${source_code.replaceAll('%', '%%')}%`
       )
     }
-    if(source_concept_id){
+    if(source_code_description){
       conceptQuery = conceptQuery.where(
-        'source_concept_id',
+        'source_code_description',
         '=',
-        ({eb}) => eb.val(source_concept_id)
+        ({eb}) => eb.val(source_code_description)
       )
     }
     if(target_concept_id){
@@ -76,6 +78,13 @@ export class ConceptService {
         'target_concept_name',
         'ilike',
         `%${target_concept_name.replaceAll('%', '%%')}%`
+      )
+    }
+    if(vocabulary_id){
+      conceptQuery = conceptQuery.where(
+        'target_vocabulary_id',
+        'ilike',
+        `%${vocabulary_id.replaceAll('%', '%%')}%`
       )
     }
 
@@ -111,11 +120,11 @@ export class ConceptService {
         `%${source_code.replaceAll('%', '%%')}%`
       )
     }
-    if(source_concept_id){
+    if(source_code_description){
       countQuery = countQuery.where(
-        'source_concept_id',
-        '=',
-        ({eb}) => eb.val(source_concept_id)
+        'source_code_description',
+        'ilike',
+        `%${source_code_description.replaceAll('%', '%%')}%`
       )
     }
     if(target_concept_id){
@@ -142,11 +151,11 @@ export class ConceptService {
     return {
       concepts: concepts.map((concept) => ({
         source_code: concept.source_code,
-        source_concept_id: concept.source_concept_id,
+        source_code_description: concept.source_code_description,
         target_concept_id: concept.target_concept_id,
         target_concept_name: concept.target_concept_name,
         domain_id: concept.domain_id,
-        vocabulary_id: concept.source_vocabulary_id,
+        vocabulary_id: concept.target_vocabulary_id,
       })),
       total: Number(countResult?.total || 0),
       page: page,

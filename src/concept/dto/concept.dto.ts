@@ -65,25 +65,32 @@ export class SearchConceptQueryDto {
   source_code?: string;
 
   @ApiPropertyOptional({
-    description: 'Search query for snuh concept id',
-    example: '0',
+    description: 'Search query for snuh source_code_description',
+    example: 'bleeding',
   })
   @IsString()
-  source_concept_id?: string;
+  source_code_description?: string;
 
   @ApiPropertyOptional({
     description: 'Search query for target concept id',
-    example: '0',
+    example: '28779',
   })
   @IsString()
   target_concept_id?: string;
 
   @ApiPropertyOptional({
     description: 'Search query for target concept name',
-    example: '0',
+    example: 'Bleeding',
   })
   @IsString()
   target_concept_name?: string; 
+
+  @ApiPropertyOptional({
+    description: 'Search query for vocabulary_id name',
+    example: 'SNOMED',
+  })
+  @IsString()
+  vocabulary_id?: string; 
 
   @ApiPropertyOptional({
     description: 'Domain ID',
@@ -123,20 +130,20 @@ export class ConceptResponseDto {
   source_code: string;
 
   @ApiProperty({
-    description: 'Source Concept Id',
-    example: '0',
+    description: 'Source Concept Description',
+    example: 'bleeding, esophageal varix',
   })
-  source_concept_id: string;
+  source_code_description: string;
 
   @ApiProperty({
     description: 'Target Concept Id',
-    example: '201826',
+    example: '28779',
   })
   target_concept_id: string;
 
   @ApiProperty({
     description: 'Target Concept Name',
-    example: 'Type 2 diabetes mellitus',
+    example: 'Bleeding esophageal varices',
   })
   target_concept_name: string;
 
@@ -149,7 +156,7 @@ export class ConceptResponseDto {
 
   @ApiProperty({
     description: 'Vocabulary ID',
-    example: 'ICD10CM',
+    example: 'SNOMED',
   })
   vocabulary_id: string;
 }
