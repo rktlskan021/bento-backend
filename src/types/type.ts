@@ -103,7 +103,6 @@ export interface Snuh_ConceptSet {
 }
 
 export interface Snuh_CohortDefinition{
-  conceptsets?: Snuh_ConceptSet[];
   initialGroup: InitialGroup;
   comparisonGroup?: ComparisonGroup;  
 }
@@ -400,7 +399,6 @@ export interface DemographicFilter {
  *
  */
 const cohort1: Snuh_CohortDefinition = {
-  conceptsets: [],
   initialGroup: {
     containers: [
       {

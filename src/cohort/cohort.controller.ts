@@ -27,6 +27,7 @@ import {
   CreateCohortDto,
   UpdateCohortDto,
   CohortIdParam,
+  CohortNameQuery,
   PaginationQuery,
   CohortResponse,
   CohortStatisticsResponse,
@@ -72,6 +73,31 @@ export class CohortController {
   @Get()
   async getCohorts(@Query() { page, limit, query }: PaginationSearchQuery) {
     return await this.cohortService.getCohorts(page, limit, query);
+  }
+
+  @ApiOperation({summary: 'Check Duplicate Cohort Name'})
+  @ApiQuery({
+    name: 'cohortName',
+    required: true,
+    type: String,
+    description: 'Cohort Name'
+  })
+  @Get('check')
+  async checkDuplicateCohortName(@Query() { cohortName }: CohortNameQuery){
+    const isDuplicate = await this.cohortService.isCohortNameDuplicate(cohortName);
+
+    if(isDuplicate){
+      return {
+        status: false,
+        meaage: '이미 사용 중인 코호트 이름입니다.',
+      };
+    }
+    else{
+      return {
+        status: true,
+        meaage: '사용 가능한 이름입니다.',
+      };
+    }
   }
 
   @ApiOperation({ summary: 'Get cohort details' })

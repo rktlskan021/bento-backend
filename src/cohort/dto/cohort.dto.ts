@@ -11,7 +11,6 @@ import { Type } from 'class-transformer';
 import { Snuh_CohortDefinition } from '../../types/type';
 
 const cohortDefExample = {
-  conceptsets: [],
   initialGroup: {
     containers: [
       {
@@ -98,6 +97,31 @@ export class CohortIdParam {
   })
   @IsUUID()
   cohortId: string;
+}
+
+export class CohortNameQuery {
+  @ApiProperty({
+    description: 'Cohort Name',
+    example: 'Cohort Name 2',
+  })
+  @IsString()
+  cohortName: string;
+}
+
+export class IsCheckCohortNameResponse {
+  @ApiProperty({
+    description: 'Is the Cohort Name a dulicate or not',
+    example: 'true',
+  })
+  @IsBoolean()
+  status: boolean;
+
+  @ApiProperty({
+    description: 'Message',
+    example: '이미 사용 중인 이름입니다.',
+  })
+  @IsString()
+  message: string;
 }
 
 export class PaginationQuery {
