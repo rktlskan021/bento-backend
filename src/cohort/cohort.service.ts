@@ -25,14 +25,14 @@ export class CohortService {
     query?: string,
   ): Promise<CohortListResponse> {
     const offset = page * limit;
-
+    const _limit = Number(limit);
     query = query?.trim() || '';
 
     // 코호트 목록 조회 쿼리
     let cohortsQuery = getBaseDB()
       .selectFrom('snuh_cohort')
       .selectAll()
-      .limit(Number(limit))
+      .limit(_limit)
       .offset(offset)
       .orderBy('updated_at', 'desc');
 
