@@ -62,14 +62,14 @@ export class ConceptService {
     if(source_code_description){
       conceptQuery = conceptQuery.where(
         'source_code_description',
-        '=',
-        ({eb}) => eb.val(source_code_description)
+        'ilike',
+        `%${source_code_description.replaceAll('%', '%%')}%`
       )
     }
     if(target_concept_id){
       conceptQuery = conceptQuery.where(
         'target_concept_id',
-        'ilike',
+        '=',
         ({eb}) => eb.val(target_concept_id)
       )
     }
@@ -101,13 +101,13 @@ export class ConceptService {
     if (query) {
       if(isInteger){
         conceptQuery = conceptQuery.where((eb) => eb.or([
-          eb('source_concept_id', '=', ({eb}) => eb.val(query)),
           eb('target_concept_id', '=', ({eb}) => eb.val(query)),
         ]));
       } else{
         conceptQuery = conceptQuery.where((eb) => eb.or([
           eb('source_code', 'ilike', `%${query.replaceAll('%', '%%')}%`),
           eb('target_concept_name', 'ilike', `%${query.replaceAll('%', '%%')}%`),
+          eb('source_code_description', 'ilike', `%${query.replaceAll('%', '%%')}%`),
         ]));
       }
     }
@@ -130,7 +130,7 @@ export class ConceptService {
     if(target_concept_id){
       countQuery = countQuery.where(
         'target_concept_id',
-        'ilike',
+        '=',
         ({eb}) => eb.val(target_concept_id)
       )
     }
