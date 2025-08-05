@@ -9,7 +9,7 @@ import {
 import { JwtAuthGuard } from 'src/auth/jwt-auth.guard';
 
 
-@ApiTags('concept')
+@ApiTags('Concept')
 @Controller('/api/concept')
 export class ConceptController {
   constructor(private readonly conceptService: ConceptService) {}
@@ -20,8 +20,8 @@ export class ConceptController {
     description: 'Returns the list of concepts based on search query',
     type: ConceptSearchResponseDto,
   })
-  @ApiBearerAuth('access_token')
-  @UseGuards(JwtAuthGuard)
+  // @ApiBearerAuth('access_token')
+  // @UseGuards(JwtAuthGuard)
   @Get('search')
   async searchConcepts(
     @Query() queryParams: SearchConceptQueryDto,
