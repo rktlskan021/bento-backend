@@ -9,6 +9,7 @@ import {
   Query,
   HttpCode,
   HttpStatus,
+  ConflictException,
 } from '@nestjs/common';
 import { CohortService } from './cohort.service';
 import {
@@ -161,6 +162,9 @@ export class CohortController {
   @HttpCode(HttpStatus.CREATED)
   async createCohort(@Body() createCohortDto: CreateCohortDto) {
     const { name, description, cohortDefinition, temporary } = createCohortDto;
+    if(await this.cohortService.isCohortNameDuplicate(name)){
+      throw new ConflictException('이미 존재하는 코호트 이름입니다.');
+    }
     return await this.cohortService.createNewCohort(
       name,
       description,
