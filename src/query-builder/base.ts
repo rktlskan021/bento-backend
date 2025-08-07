@@ -40,6 +40,23 @@ import * as specimen from './filters/specimen';
 import * as visitOccurrence from './filters/visit-occurrence';
 import * as demographic from './filters/demographic';
 
+import * as conditionEra_ from './searchs/condition-era';
+import * as conditionOccurrence_ from './searchs/condition-occurrence';
+import * as death_ from './searchs/death';
+import * as visitOccurrence_ from './searchs/visit-occurrence';
+import * as procedureOccurrence_ from './searchs/procedure-occurrence';
+import * as specimen_ from './searchs/specimen';
+import * as drugExposure_ from './searchs/drug-exposure';
+import * as observation_ from './searchs/observation';
+import * as observationPeriod_ from './searchs/observation-period';
+import * as measurement_ from './searchs/measurement';
+import * as note_ from './searchs/note';
+import * as bioSignal_ from './searchs/bioSignal';
+import * as location_ from './searchs/location';
+import * as careSite_ from './searchs/care-site';
+import * as provider_ from './searchs/provider';
+import * as deviceExposure_ from './searchs/device-exposure';
+
 export const getBaseDB = () => {
   return db;
 };
@@ -938,3 +955,61 @@ export const buildBaseQuery = (
       (comparisonGroup?.containers.length ?? 0),
   };
 };
+
+export const searchSubQuery = (
+  db: Kysely<Database>,
+  database: 'clickhouse' | 'postgres' | string,
+  table: string,
+  column: string,
+) => {
+  const query: (SelectQueryBuilder<Database, any, any>) = handleSearch(
+    db,
+    table,
+    column
+  )
+
+  return query;
+}
+
+export const handleSearch = (
+  db: Kysely<Database>,
+  table: string,
+  column: string,
+) => {
+  switch (table) {
+    case 'condition_era':
+      return conditionEra_.getQuery(db, column);
+    case 'condition_occurrence':
+      return conditionOccurrence_.getQuery(db, column);
+    case 'death':
+      return death_.getQuery(db, column);
+    case 'device_exposure':
+      return deviceExposure_.getQuery(db, column);
+    case 'drug_exposure':
+      return drugExposure_.getQuery(db, column);
+    case 'measurement':
+      return measurement_.getQuery(db, column);
+    case 'observation':
+      return observation_.getQuery(db, column);
+    case 'observation_period':
+      return observationPeriod_.getQuery(db, column);
+    case 'procedure_occurrence':
+      return procedureOccurrence_.getQuery(db, column);
+    case 'specimen':
+      return specimen_.getQuery(db, column);
+    case 'visit_occurrence':
+      return visitOccurrence_.getQuery(db, column);
+    case 'note':
+      return note_.getQuery(db, column); 
+    case 'bio_signal':
+      return bioSignal_.getQuery(db, column);
+    case 'location':
+      return location_.getQuery(db, column);
+    case 'care_site':
+      return careSite_.getQuery(db, column);
+    case 'provider':
+      return provider_.getQuery(db, column);
+    default:
+      throw new Error(`Unknown table type: ${table}`);
+  }
+}

@@ -43,6 +43,8 @@ export interface Database {
   drug_strength: DrugStrength;
   domain: Domain;
   specimen: Specimen;
+  note: Note;
+  bio_signal: BioSignal;
 
   first_condition_era: ConditionEra;
   first_condition_occurrence: ConditionOccurrence;
@@ -202,6 +204,8 @@ export interface ConditionOccurrence {
   condition_source_value?: string;
   condition_source_concept_id?: string;
   condition_status_source_value?: string;
+  ext_cond_type_1_concept_id?: string;
+  ext_cond_type_2_concept_id?: string;
 }
 
 export interface Death {
@@ -238,6 +242,7 @@ export interface DrugExposure {
   drug_source_concept_id?: string;
   route_source_value?: string;
   dose_unit_source_value?: string;
+  dose_unit_concept_id?: string;
 }
 
 export interface Measurement {
@@ -260,6 +265,7 @@ export interface Measurement {
   measurement_source_value?: string;
   measurement_source_concept_id?: string;
   unit_source_value?: string;
+  unit_source_concept_id?: string;
   value_source_value?: string;
   measurement_event_id?: string;
   meas_event_field_concept_id?: string;
@@ -287,6 +293,7 @@ export interface Observation {
   value_source_value?: string;
   observation_event_id?: string;
   obs_event_field_concept_id?: string;
+  ext_obs_value_subject_ccp_id?: string;
 }
 
 export interface ProcedureOccurrence {
@@ -492,6 +499,45 @@ export interface Specimen {
   unit_source_value?: string;
   anatomic_site_source_value?: string;
   disease_status_source_value?: string;
+}
+
+export interface Note {
+  note_id: string;
+  person_id: string;
+  note_date: string;
+  note_datetime: string;
+  note_type_concept_id: string;
+  note_class_concept_id: string;
+  note_title?: string;
+  note_text: string;
+  encoding_concept_id: string;
+  language_concept_id: string;
+  provider_id?: string;
+  visit_occurrence_id?: string;
+  visit_detail_id?: string;
+  note_source_value?: string;
+  note_event_id?: string;
+  note_event_field_concept_id?: string;
+  ext_format_id?: string;
+  ext_format_seq?: string;
+  ext_order_date?: string;
+  note_source_value2?: string;
+  note_source_value3?: string;
+  note_source_value4?: string;
+  provider_id2?: string;
+}
+
+export interface BioSignal {
+  bio_signal_id: string;
+  person_id?: string;
+  bio_signal_concept_id?: string;
+  bio_signal_source_value?: string;
+  bio_signal_date?: string;
+  bio_signal_datatime?: string;
+  file_path?: string;
+  visit_occurrence_id?: string;
+  event_id?: string;
+  event_field_concept_id?: string;
 }
 
 export interface SnuhConcept {

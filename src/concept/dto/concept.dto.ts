@@ -48,7 +48,21 @@ export enum DomainType {
   CONDITION_DEVICE = 'Condition/Device',
 }
 
-export class SearchConceptQueryDto {
+export class SearchConceptDto {
+  @ApiProperty({
+    description: 'Select Base Table',
+    example: 'condition_era',
+  })
+  @IsString()
+  table: string;
+
+  @ApiProperty({
+    description: 'Select table column',
+    example: 'condition_concept_id',
+  })
+  @IsString()
+  column: string;
+
   @ApiPropertyOptional({
     description: 'Search query for concept names',
     example: 'Diabetes',

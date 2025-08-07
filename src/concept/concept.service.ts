@@ -5,10 +5,13 @@ import {
   ConceptSearchResponseDto,
   DomainType,
 } from './dto/concept.dto';
+import { buildSearchConceptQuery } from 'src/query-builder/concept';
 
 @Injectable()
 export class ConceptService {
   async searchConcepts(
+    table: string,
+    column: string,
     query?: string,
     source_code?: string,
     source_code_description?: string,
@@ -30,7 +33,8 @@ export class ConceptService {
 
     const isInteger = !isNaN(Number(query));
 
-    let conceptQuery = getBaseDB().selectFrom('snuh_concept').selectAll();
+    let subQuery = buildSearchConceptQuery(getBaseDB(), {table, column, database: process.env.DB_TYPE})
+    let conceptQuery = getBaseDB().selectFrom('snuh_concept').selectAll().where('target_concept_id', 'in', subQuery);
 
     if (domain) {
       conceptQuery = conceptQuery.where('domain_id', '=', domain);

@@ -1,10 +1,10 @@
-import { Controller, Get, Query, Param, UseGuards } from '@nestjs/common';
-import { ApiOperation, ApiResponse, ApiTags, ApiParam, ApiBearerAuth } from '@nestjs/swagger';
+import { Controller, Get, Query, Param, UseGuards, Post, Body } from '@nestjs/common';
+import { ApiOperation, ApiResponse, ApiTags, ApiParam, ApiBearerAuth, ApiBody } from '@nestjs/swagger';
 import { ConceptService } from './concept.service';
 import {
   ConceptResponseDto,
   ConceptSearchResponseDto,
-  SearchConceptQueryDto,
+  SearchConceptDto,
 } from './dto/concept.dto';
 import { JwtAuthGuard } from 'src/auth/jwt-auth.guard';
 
@@ -22,12 +22,13 @@ export class ConceptController {
   })
   // @ApiBearerAuth('access_token')
   // @UseGuards(JwtAuthGuard)
-  @Get('search')
+  @ApiBody({ type: SearchConceptDto })
+  @Post('search')
   async searchConcepts(
-    @Query() queryParams: SearchConceptQueryDto,
+    @Body() searchConcetpDto: SearchConceptDto,
   ): Promise<ConceptSearchResponseDto> {
-    const { query, source_code, source_code_description, target_concept_id, target_concept_name, vocabulary_id, page = 0, limit = 100, domain } = queryParams;
-    return this.conceptService.searchConcepts(query, source_code, source_code_description, target_concept_id, target_concept_name, vocabulary_id, page, limit, domain);
+    const {table, column, query, source_code, source_code_description, target_concept_id, target_concept_name, vocabulary_id, page = 0, limit = 100, domain } = searchConcetpDto;
+    return this.conceptService.searchConcepts(table, column, query, source_code, source_code_description, target_concept_id, target_concept_name, vocabulary_id, page, limit, domain);
   }
 
   // @ApiOperation({ summary: 'Get concept by ID' })
