@@ -9,12 +9,13 @@ import { UserModule } from './user/user.module';
 import { AuthModule } from './auth/auth.module';
 import * as dotenv from 'dotenv';
 import { User } from 'src/user/user.entity';
+import { SettingModule } from './setting/setting.module';
 
 dotenv.config();
 
 @Module({
   imports: [
-    PersonModule, ConceptModule, CohortModule, UserModule, AuthModule,
+    PersonModule, ConceptModule, CohortModule, UserModule, AuthModule, SettingModule,
     TypeOrmModule.forRoot({
       type: 'postgres',
       host: process.env.ATLAS_DB_HOST || 'localhost',

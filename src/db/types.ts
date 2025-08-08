@@ -58,6 +58,8 @@ export interface Database {
   first_specimen: Specimen;
   first_dose_era: DoseEra;
   first_observation_period: ObservationPeriod;
+
+  table_column_settings: TableColumnSettings;
 }
 
 export const db = new Kysely<Database>({
@@ -565,4 +567,10 @@ export interface SnuhCohort {
 export interface SnuhCohortDetail {
   cohort_id: string;
   person_id: string;
+}
+
+export interface TableColumnSettings {
+  table_name: string;
+  column_name: string;
+  is_active: number;
 }
