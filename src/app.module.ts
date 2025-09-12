@@ -10,6 +10,7 @@ import { AuthModule } from './auth/auth.module';
 import * as dotenv from 'dotenv';
 import { User } from 'src/user/user.entity';
 import { SettingModule } from './setting/setting.module';
+import { TextSearchModule } from './text-search/text-search.module';
 
 dotenv.config();
 
@@ -27,6 +28,7 @@ dotenv.config();
       synchronize: false,
       logging: true,
     }),
+    TextSearchModule,
   ],
   controllers: [AppController],
   providers: [AppService],

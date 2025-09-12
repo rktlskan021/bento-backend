@@ -421,27 +421,29 @@ export class CohortService {
             if (!Array.isArray(query)) {
               query = [query];
             }
-            let results = await Promise.all(query.map((q) => q.execute()));
-            for (let i = 0; i < query.length; i++) {
-              console.log(query[i])
-              if ('select' in query[i]) {
-                containerCounts = Array(
-                  cohortDef.initialGroup.containers.length +
-                    (cohortDef.comparisonGroup?.containers.length ?? 0),
-                ).fill(0)
-                for (const { container_id, count } of results[i] as {
-                  container_id: string;
-                  count: string;
-                }[]) {
-                  const _count = Number.parseInt(count);
-                  if(container_id === '1'){
-                    totalPatients = _count;
-                  } else if(container_id === containerCounts.length.toString()){
-                    finalPatientCount = _count;
+            try{
+             let results = await Promise.all(query.map((q) => q.execute()));
+              for (let i = 0; i < query.length; i++) {
+                console.log(query[i])
+                if ('select' in query[i]) {
+                  containerCounts = Array(
+                    cohortDef.initialGroup.containers.length +
+                      (cohortDef.comparisonGroup?.containers.length ?? 0),
+                  ).fill(0)
+                  for (const { container_id, count } of results[i] as {
+                    container_id: string;
+                    count: string;
+                  }[]) {
+                    const _count = Number.parseInt(count);
+                    if(container_id === '1') totalPatients = _count;
+                    if(container_id === containerCounts.length.toString()) finalPatientCount = _count;
+                    containerCounts[Number.parseInt(container_id) - 1] = _count;
                   }
-                  containerCounts[Number.parseInt(container_id) - 1] = _count;
                 }
               }
+            }
+            catch(err){
+              console.log(err);
             }
           }
         });
@@ -570,7 +572,7 @@ export class CohortService {
   async isCohortNameDuplicate(cohortName: string): Promise<boolean> {
     const cohort = await getBaseDB()
       .selectFrom('snuh_cohort')
-      .selectAll()
+      .select('name')
       .where('name', 'like', cohortName)
       .executeTakeFirst();
 

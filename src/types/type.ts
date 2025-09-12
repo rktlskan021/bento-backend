@@ -34,6 +34,7 @@ export interface StringOperator {
   startsWith?: string | string[];
   endsWith?: string | string[];
   contains?: string | string[];
+  ncontains?: string | string[];
 }
 
 export type Identifier = string;
@@ -107,7 +108,6 @@ export interface Snuh_CohortDefinition{
   comparisonGroup?: ComparisonGroup;  
 }
 
-
 export interface BarChartCohortDefinition extends Snuh_CohortDefinition {
   data?: Filter;
 }
@@ -117,6 +117,10 @@ export interface BoxPlotCountBy {
   age?: NumberWithOperator;
   date?: DateWithOperator;
   value?: NumberWithOperator;
+}
+
+export interface Text_Search {
+  query: StringOperator
 }
 
 /**
@@ -322,7 +326,7 @@ export interface ObservationPeriodFilter {
   endAge?: NumberWithOperator;
   startDate?: DateWithOperator;
   endDate?: DateWithOperator;
-  //periodType?: BigIntWithOperator;
+  periodType?: IdentifierWithOperator;
   length?: NumberWithOperator;
 }
 

@@ -99,7 +99,7 @@ export class CohortIdParam {
   cohortId: string;
 }
 
-export class CohortNameQuery {
+export class CohortNameDto {
   @ApiProperty({
     description: 'Cohort Name',
     example: 'Cohort Name 2',

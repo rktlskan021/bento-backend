@@ -208,6 +208,8 @@ export interface ConditionOccurrence {
   condition_status_source_value?: string;
   ext_cond_type_1_concept_id?: string;
   ext_cond_type_2_concept_id?: string;
+  ext_cond_source_value_kcd?: string;
+  ext_cond_source_value_cc_text?: string;
 }
 
 export interface Death {
@@ -245,6 +247,8 @@ export interface DrugExposure {
   route_source_value?: string;
   dose_unit_source_value?: string;
   dose_unit_concept_id?: string;
+  atc_cd?: string;
+  effective_drug_dose?: string;
 }
 
 export interface Measurement {
@@ -296,6 +300,7 @@ export interface Observation {
   observation_event_id?: string;
   obs_event_field_concept_id?: string;
   ext_obs_value_subject_ccp_id?: string;
+  ext_etc_source_value?: string;
 }
 
 export interface ProcedureOccurrence {
@@ -573,4 +578,5 @@ export interface TableColumnSettings {
   table_name: string;
   column_name: string;
   is_active: number;
+  field_type: string;
 }

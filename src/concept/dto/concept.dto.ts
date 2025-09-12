@@ -107,15 +107,6 @@ export class SearchConceptDto {
   vocabulary_id?: string; 
 
   @ApiPropertyOptional({
-    description: 'Domain ID',
-    example: 'Condition',
-    enum: DomainType,
-  })
-  @IsEnum(DomainType)
-  @IsOptional()
-  domain?: DomainType;
-
-  @ApiPropertyOptional({
     description: 'Page number (0-based)',
     default: 0,
     example: 0,

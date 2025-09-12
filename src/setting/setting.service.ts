@@ -4,17 +4,40 @@ import { SettingColumn } from './dto/setting.dto';
 
 @Injectable()
 export class SettingService {
-    async getColumns() {
+    async getActiveColumns() {
         const result = {}
-        const query = getBaseDB().selectFrom('table_column_settings').select(['table_name', 'column_name']).where('is_active', '=', 1); 
+        const query = getBaseDB().selectFrom('table_column_settings').select(['table_name', 'column_name', 'field_type']).where('is_active', '=', 1); 
         const tmp = query.execute();
         
         (await tmp).forEach((column) => {
-            const { table_name, column_name } = column;
+            const { table_name, column_name, field_type } = column;
 
             if (!result[table_name]) result[table_name] = [];
 
-            result[table_name].push(column_name);
+            result[table_name].push({
+                column_name: column_name,
+                field_type: field_type
+            });
+        });
+
+        return result;
+    }
+
+    async getColumns() {
+        const result = {}
+        const query = getBaseDB().selectFrom('table_column_settings').selectAll(); 
+        const tmp = query.execute();
+        
+        (await tmp).forEach((column) => {
+            const { table_name, column_name, field_type, is_active } = column;
+
+            if (!result[table_name]) result[table_name] = [];
+
+            result[table_name].push({
+                column_name: column_name,
+                field_type: field_type,
+                is_active: is_active
+            });
         });
 
         return result;

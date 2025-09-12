@@ -7,13 +7,19 @@ import { SettingColumnDto } from './dto/setting.dto';
 export class SettingController {
     constructor(private readonly settingService: SettingService) {}
 
-    @ApiOperation({summary: '코호트 생성에서 띄어질 테이블별 컬럼'})
+    @ApiOperation({summary: '코호트 생성에서 띄워질 테이블별 컬럼'})
+    @Get('/active')
+    async getActiveColumns(){
+        return await this.settingService.getActiveColumns();
+    }
+
+    @ApiOperation({summary: '코호트 생성에서 띄워질 테이블별 컬럼'})
     @Get()
     async getColumns(){
         return await this.settingService.getColumns();
     }
 
-    @ApiOperation({summary: '코호트 생성에서 띄어질 테이블별 컬럼 설정'})
+    @ApiOperation({summary: '코호트 생성에서 띄워질 테이블별 컬럼 설정'})
     @ApiBody({type: SettingColumnDto})
     @Post()
     async postColumns(@Body() settingColumnDto:SettingColumnDto){

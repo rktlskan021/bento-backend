@@ -20,6 +20,8 @@ import {
   Snuh_Concept,
   Snuh_CohortDefinition,
   Filter,
+  Text_Search,
+  StringOperator
 } from '../types/type';
 import { PartitionByExpression } from 'kysely/dist/cjs/parser/partition-by-parser';
 import { Kysely } from 'kysely';
@@ -51,11 +53,26 @@ import * as observation_ from './searchs/observation';
 import * as observationPeriod_ from './searchs/observation-period';
 import * as measurement_ from './searchs/measurement';
 import * as note_ from './searchs/note';
-import * as bioSignal_ from './searchs/bioSignal';
+import * as bioSignal_ from './searchs/bio-signal';
 import * as location_ from './searchs/location';
 import * as careSite_ from './searchs/care-site';
 import * as provider_ from './searchs/provider';
 import * as deviceExposure_ from './searchs/device-exposure';
+
+import * as conditionOccurrence_text from './text-searchs/condition-occurrence';
+import * as bioSignal_text from './text-searchs/bioSignal';
+import * as death_text from './text-searchs/death';
+import * as visitOccurrence_text from './text-searchs/visit-occurrence';
+import * as procedureOccurrence_text from './text-searchs/procedure-occurrence';
+import * as specimen_text from './text-searchs/specimen';
+import * as drugExposure_text from './text-searchs/drug-exposure';
+import * as observation_text from './text-searchs/observation';
+import * as measurement_text from './text-searchs/measurement';
+import * as note_text from './text-searchs/note';
+import * as location_text from './text-searchs/location';
+import * as careSite_text from './text-searchs/care-site';
+import * as provider_text from './text-searchs/provider';
+import * as deviceExposure_text from './text-searchs/device-exposure';
 
 export const getBaseDB = () => {
   return db;
@@ -340,6 +357,23 @@ export const handleStringWithOperator = <DB, TB extends keyof DB, O>(
       }
     } else {
       query = query.where(column, 'ilike', '%' + operator.contains + '%');
+    }
+  }
+
+  if (operator.ncontains) {
+    if (Array.isArray(operator.ncontains)) {
+      if (operator.ncontains.length) {
+        const arr = operator.ncontains;
+        query = query.where(({ or }) => {
+          return or(
+            arr.map((e) =>
+              eb(column, 'not ilike', '%' + e.replace('%', '%%') + '%'),
+            ),
+          );
+        });
+      }
+    } else {
+      query = query.where(column, 'not ilike', '%' + operator.ncontains + '%');
     }
   }
 
@@ -800,7 +834,19 @@ export const buildBaseQuery = (
       if (!query) {
         query = filterQuery;
       } else {
-        query = query.intersect(filterQuery);
+        switch('operator' in filter && filter.operator) {
+          case 'AND':
+            query = query.intersect(filterQuery);
+            break;
+          case 'OR':
+            query = query.union(filterQuery);
+            break;
+          case 'NOT':
+            query = query.except(filterQuery);
+            break;
+          default:
+            break;
+        }
       }
     }
 
@@ -870,7 +916,7 @@ export const buildBaseQuery = (
 
       if (!query) continue;
 
-      switch (i && 'operator' in container && container.operator) {
+      switch ('operator' in container && container.operator) {
         case 'AND':
           query = db
             .selectFrom('temp_cohort_detail')
@@ -1012,4 +1058,80 @@ export const handleSearch = (
     default:
       throw new Error(`Unknown table type: ${table}`);
   }
+}
+
+export const searchTextQuery = (
+  db: Kysely<Database>,
+  database: 'clickhouse' | 'postgres' | string,
+  table_name: string,
+  column_name: string,
+  query: Text_Search,
+) => {
+  const result = handleTextSearch(
+    db,
+    table_name,
+    column_name,
+    query
+  )
+
+  return result;
+}
+
+export const handleTextSearch = (
+  db: Kysely<Database>,
+  table_name: string,
+  column_name: string,
+  query: Text_Search,
+) => {
+  switch(table_name) {
+    case 'condition_occurrence':
+      return conditionOccurrence_text.getQuery(db, column_name, query);
+    case 'death':
+      return death_text.getQuery(db, column_name, query);
+    case 'device_exposure':
+      return deviceExposure_text.getQuery(db, column_name, query);
+    case 'drug_exposure':
+      return drugExposure_text.getQuery(db, column_name, query);
+    case 'measurement':
+      return measurement_text.getQuery(db, column_name, query);
+    case 'observation':
+      return observation_text.getQuery(db, column_name, query);
+    case 'procedure_occurrence':
+      return procedureOccurrence_text.getQuery(db, column_name, query);
+    case 'specimen':
+      return specimen_text.getQuery(db, column_name, query);
+    case 'visit_occurrence':
+      return visitOccurrence_text.getQuery(db, column_name, query);
+    case 'note':
+      return note_text.getQuery(db, column_name, query); 
+    case 'bio_signal':
+      return bioSignal_text.getQuery(db, column_name, query);
+    case 'location':
+      return location_text.getQuery(db, column_name, query);
+    case 'care_site':
+      return careSite_text.getQuery(db, column_name, query);
+    case 'provider':
+      return provider_text.getQuery(db, column_name, query);
+    default:
+      throw new Error(`Unknown table type: ${table_name}`);
+  }
+}
+
+export const handleTextWithOperator = <DB, TB extends keyof DB, O> (
+  query: SelectQueryBuilder<DB, TB, O>,
+  column: Expression<string> | ReferenceExpression<DB, TB>,
+  operator: StringOperator,
+) => {
+  if(operator.contains)
+    return query.where(column, 'ilike', `%${operator.contains}%`)
+  else if(operator.ncontains)
+    return query.where(column, 'not ilike', `%${operator.ncontains}%`)
+  else if(operator.startsWith)
+    return query.where(column, 'ilike', `${operator.startsWith}%`)
+  else if(operator.endsWith)
+    return query.where(column, 'ilike', `%${operator.endsWith}`)
+  else if(operator.eq)
+    return query.where(column, 'ilike', `${operator.eq}`)
+  else
+    return query.where(column, 'not ilike', `${operator.neq}`)
 }

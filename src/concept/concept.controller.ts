@@ -27,8 +27,8 @@ export class ConceptController {
   async searchConcepts(
     @Body() searchConcetpDto: SearchConceptDto,
   ): Promise<ConceptSearchResponseDto> {
-    const {table, column, query, source_code, source_code_description, target_concept_id, target_concept_name, vocabulary_id, page = 0, limit = 100, domain } = searchConcetpDto;
-    return this.conceptService.searchConcepts(table, column, query, source_code, source_code_description, target_concept_id, target_concept_name, vocabulary_id, page, limit, domain);
+    const {table, column, query, source_code, source_code_description, target_concept_id, target_concept_name, vocabulary_id, page = 0, limit = 100 } = searchConcetpDto;
+    return this.conceptService.searchConcepts(table, column, query, source_code, source_code_description, target_concept_id, target_concept_name, vocabulary_id, page, limit);
   }
 
   // @ApiOperation({ summary: 'Get concept by ID' })

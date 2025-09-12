@@ -1,4 +1,3 @@
-import { Snuh_CohortDefinition, IdentifierWithOperator } from '../types/type';
 import { searchSubQuery } from './base';
 import { Database } from '../db/types';
 import { Kysely, SelectQueryBuilder } from 'kysely';

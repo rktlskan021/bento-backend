@@ -7,6 +7,7 @@ import {
   handleRowNumber,
   handleYearMinusWithNumberOperator,
   getOptimizedTable,
+  handleConceptSet,
 } from '../base';
 import { Kysely } from 'kysely';
 import { Database } from '../../db/types';
@@ -92,6 +93,15 @@ export const getQuery = (
       'observation_period.observation_period_end_date',
       'observation_period.observation_period_start_date',
       a.length,
+    );
+  }
+
+  if (a.periodType) {
+    query = handleConceptSet(
+      db,
+      query,
+      'observation_period.period_type_concept_id',
+      a.periodType,
     );
   }
 

@@ -28,7 +28,7 @@ import {
   CreateCohortDto,
   UpdateCohortDto,
   CohortIdParam,
-  CohortNameQuery,
+  CohortNameDto,
   PaginationQuery,
   CohortResponse,
   CohortStatisticsResponse,
@@ -77,14 +77,9 @@ export class CohortController {
   }
 
   @ApiOperation({summary: 'Check Duplicate Cohort Name'})
-  @ApiQuery({
-    name: 'cohortName',
-    required: true,
-    type: String,
-    description: 'Cohort Name'
-  })
-  @Get('check')
-  async checkDuplicateCohortName(@Query() { cohortName }: CohortNameQuery){
+  @Post('check')
+  async checkDuplicateCohortName(@Body() cohortNameDto: CohortNameDto){
+    const {cohortName} = cohortNameDto;
     const isDuplicate = await this.cohortService.isCohortNameDuplicate(cohortName);
 
     if(isDuplicate){
