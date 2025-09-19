@@ -5,10 +5,14 @@ import {
   ConceptSearchResponseDto,
   DomainType,
 } from './dto/concept.dto';
+import { buildSearchConceptQuery } from 'src/query-builder/concept';
+import { sql } from 'kysely';
 
 @Injectable()
 export class ConceptService {
   async searchConcepts(
+    table: string,
+    column: string,
     query?: string,
     source_code?: string,
     source_code_description?: string,
@@ -17,7 +21,6 @@ export class ConceptService {
     vocabulary_id?: string,
     page: number = 0,
     limit: number = 100,
-    domain?: DomainType,
   ): Promise<ConceptSearchResponseDto> {
     const offset = page * limit;
     
@@ -30,17 +33,14 @@ export class ConceptService {
 
     const isInteger = !isNaN(Number(query));
 
-    let conceptQuery = getBaseDB().selectFrom('snuh_concept').selectAll();
-
-    if (domain) {
-      conceptQuery = conceptQuery.where('domain_id', '=', domain);
-    }
+    let subQuery = buildSearchConceptQuery(getBaseDB(), {table, column, database: process.env.DB_TYPE})
+    let conceptQuery = getBaseDB().selectFrom('snuh_concept').selectAll().where('target_concept_id', 'in', subQuery);
 
     // 검색어가 있는 경우에만 검색 조건 추가
     if (query) {
       if(isInteger){
         conceptQuery = conceptQuery.where((eb) => eb.or([
-          eb('target_concept_id', '=', ({eb}) => eb.val(query)),
+          eb(sql`CAST(target_concept_id AS String)`, 'ilike', `%${query.replaceAll('%', '%%')}%`),
         ]));
       } else{
         conceptQuery = conceptQuery.where((eb) => eb.or([
@@ -68,9 +68,9 @@ export class ConceptService {
     }
     if(target_concept_id){
       conceptQuery = conceptQuery.where(
-        'target_concept_id',
-        '=',
-        ({eb}) => eb.val(target_concept_id)
+        sql`CAST(target_concept_id AS String)`,
+        'like',
+        `%${target_concept_id.replaceAll('%', '%%')}%`
       )
     }
     if(target_concept_name){
@@ -91,20 +91,17 @@ export class ConceptService {
     // 총 결과 수를 계산하기 위한 쿼리
     let countQuery = getBaseDB()
       .selectFrom('snuh_concept')
-      .select(({ fn }) => [fn.count('source_code').as('total')]);
-
-    if (domain) {
-      countQuery = countQuery.where('domain_id', '=', domain);
-    }
+      .select(({ fn }) => [fn.count('source_code').as('total')])
+      .where('target_concept_id', 'in', subQuery);
 
     // 검색어가 있는 경우에만 검색 조건 추가
     if (query) {
       if(isInteger){
         conceptQuery = conceptQuery.where((eb) => eb.or([
-          eb('target_concept_id', '=', ({eb}) => eb.val(query)),
+          eb(sql`CAST(target_concept_id AS String)`, 'ilike', `%${query.replaceAll('%', '%%')}%`),
         ]));
       } else{
-        conceptQuery = conceptQuery.where((eb) => eb.or([
+        countQuery = countQuery.where((eb) => eb.or([
           eb('source_code', 'ilike', `%${query.replaceAll('%', '%%')}%`),
           eb('target_concept_name', 'ilike', `%${query.replaceAll('%', '%%')}%`),
           eb('source_code_description', 'ilike', `%${query.replaceAll('%', '%%')}%`),
@@ -129,9 +126,9 @@ export class ConceptService {
     }
     if(target_concept_id){
       countQuery = countQuery.where(
-        'target_concept_id',
-        '=',
-        ({eb}) => eb.val(target_concept_id)
+        sql`CAST(target_concept_id AS String)`,
+        'like',
+        `%${target_concept_id.replaceAll('%', '%%')}%`
       )
     }
     if(target_concept_name){

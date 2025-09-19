@@ -62,6 +62,7 @@ export class ClickhouseConnection implements DatabaseConnection {
         const result = await this.#client.query({
           query,
           clickhouse_settings: {
+            union_default_mode: 'DISTINCT',  // 명시적 설정
             date_time_input_format: 'best_effort',
           },
         });
