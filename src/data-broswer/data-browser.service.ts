@@ -1,581 +1,267 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { getBaseDB } from '../query-builder/base';
-import { Snuh_CohortDefinition } from '../types/type';
-import { uuidv7 } from 'uuidv7';
-import { buildCreateCohortQuery } from '../query-builder';
-import * as moment from 'moment';
-import {
-  CohortResponse,
-  CohortStatisticsResponse,
-  CreateCohortResponse,
-  UpdateCohortResponse,
-  DeleteCohortResponse,
-  CohortListResponse,
-  CohortPersonsResponse,
-  CohortDetailResponse,
-  IsCheckCohortNameResponse,
-} from './dto/cohort.dto';
-import { string } from 'sql-formatter/dist/cjs/lexer/regexFactory';
+import { Kysely, sql, SelectQueryBuilder } from 'kysely';
+import { Database } from '../db/types';
 
 @Injectable()
-export class CohortService {
-  async getCohorts(
-    page: number = 0,
-    limit: number = 50,
-    query?: string,
-  ): Promise<CohortListResponse> {
-    const offset = page * limit;
-    const _limit = Number(limit);
-    query = query?.trim() || '';
+export class DataBrowserService {
+  constructor(private readonly db: Kysely<Database>) {}
 
-    // 코호트 목록 조회 쿼리
-    let cohortsQuery = getBaseDB()
-      .selectFrom('snuh_cohort')
-      .selectAll()
-      .limit(_limit)
-      .offset(offset)
-      .orderBy('updated_at', 'desc');
+  /**
+   * 파이프라인 1단계: 모든 도메인의 컨셉 및 환자 수 집계
+   */
+  async getDomainSummary(keyword?: string, cohortId?: string) {
+    const personSubQuery = cohortId
+      ? this.db.selectFrom('cohort_detail').select('person_id').where('cohort_id', '=', cohortId)
+      : this.db.selectFrom('person').select('person_id');
 
-    if (query) {
-      cohortsQuery = cohortsQuery.where(({ eb }) =>
-        eb.or([
-          eb('name', 'ilike', `%${query.replaceAll('%', '%%')}%`),
-          eb('description', 'ilike', `%${query.replaceAll('%', '%%')}%`),
-        ]),
-      );
+    let conceptSubQuery = this.db.selectFrom('snuh_concept').select('target_concept_id');
+    if (keyword) {
+      conceptSubQuery = conceptSubQuery.where('target_concept_name', 'ilike', `%${keyword}%`);
     }
 
-    // 총 결과 수를 계산하기 위한 쿼리
-    let countQuery = getBaseDB()
-      .selectFrom('snuh_cohort')
-      .select(({ fn }) => [fn.count('cohort_id').as('total')]);
-
-    if (query) {
-      countQuery = countQuery.where(({ eb }) =>
-        eb.or([
-          eb('name', 'ilike', `%${query.replaceAll('%', '%%')}%`),
-          eb('description', 'ilike', `%${query.replaceAll('%', '%%')}%`),
-        ]),
-      );
-    }
-
-    // 두 쿼리를 병렬로 실행
-    const [cohorts, countResult] = await Promise.all([
-      cohortsQuery.execute(),
-      countQuery.executeTakeFirst(),
-    ]);
-
-    return {
-      cohorts,
-      total: Number(countResult?.total || 0),
-      page,
-      limit,
-    };
-  }
-
-  async getCohortStatistics(id: string): Promise<CohortStatisticsResponse> {
-    const cohort = await getBaseDB()
-      .selectFrom('snuh_cohort')
-      .selectAll()
-      .where('cohort_id', '=', id)
-      .executeTakeFirst();
-
-    if (!cohort) {
-      throw new NotFoundException('Cohort not found.');
-    }
-
-    const [
-      genders,
-      mortality,
-      age,
-      visitTypes,
-      visitCounts,
-      topTenDrugs,
-      topTenConditions,
-      topTenProcedures,
-      topTenMeasurements,
-    ] = await Promise.all([
-      getBaseDB() // gender
-        .selectFrom('snuh_cohort_detail')
-        .where('cohort_id', '=', id)
-        .leftJoin('person', 'person.person_id', 'snuh_cohort_detail.person_id')
-        .leftJoin('concept', 'concept.concept_id', 'person.gender_concept_id')
-        .groupBy(['concept.concept_id', 'concept.concept_name'])
-        .select(({ fn }) => [
-          'concept.concept_name',
-          fn.count('person.person_id').as('count'),
-        ])
-        .execute(),
-      getBaseDB() // mortality
-        .selectFrom('snuh_cohort_detail')
-        .where('cohort_id', '=', id)
-        .leftJoin('death', 'death.person_id', 'snuh_cohort_detail.person_id')
-        .select(({ eb, fn }) => [
-          eb(
-            fn.count('snuh_cohort_detail.person_id'),
-            '-',
-            fn.count('death.person_id'),
-          ).as('alive'),
-          fn.count('death.person_id').as('deceased'),
-        ])
-        .executeTakeFirst(),
-      getBaseDB() // age
-        .selectFrom(
-          getBaseDB()
-            .selectFrom('snuh_cohort_detail')
-            .where('cohort_id', '=', id)
-            .leftJoin('person', 'person.person_id', 'snuh_cohort_detail.person_id')
-            .select(({ eb, fn }) => [
-              eb(
-                eb.ref('person.year_of_birth'),
-                '-',
-                eb.fn<number>('_get_year', [eb.fn('now')]),
-              ).as('age'),
-            ])
-            .as('tmp'),
-        )
-        .groupBy(({ eb, fn }) => [fn('floor', [eb(eb.ref('age'), '/', 10)])])
-        .select(({ eb, fn }) => [
-          eb(fn('floor', [eb(eb.ref('age'), '/', 10)]), '*', 10).as(
-            'age_start',
-          ),
-          eb(eb(fn('floor', [eb(eb.ref('age'), '/', 10)]), '*', 10), '+', 9).as(
-            'age_end',
-          ),
-          fn.count('age').as('count'),
-        ])
-        .execute(),
-      getBaseDB() // visit type
-        .selectFrom('visit_occurrence')
-        .where('person_id', 'in', (eb) =>
-          eb
-            .selectFrom('snuh_cohort_detail')
-            .where('cohort_id', '=', id)
-            .select('person_id'),
-        )
-        .leftJoin('concept', 'visit_concept_id', 'concept_id')
-        .groupBy('concept_name')
-        .select(({ fn }) => [
-          'concept_name',
-          fn.count('concept_name').as('count'),
-        ])
-        .execute(),
-      getBaseDB() // visit count
-        .selectFrom(
-          getBaseDB()
-            .selectFrom('visit_occurrence')
-            .where('person_id', 'in', (eb) =>
-              eb
-                .selectFrom('snuh_cohort_detail')
-                .where('cohort_id', '=', id)
-                .select('person_id'),
-            )
-            .groupBy('person_id')
-            .select(({ fn }) => fn.count('person_id').as('cnt'))
-            .as('tmp'),
-        )
-        .groupBy('cnt')
-        .select(({ fn }) => ['cnt', fn.count('cnt').as('cnt_cnt')])
-        .execute(),
-      getBaseDB() // top 10 drug
-        .selectFrom(
-          getBaseDB()
-            .selectFrom('drug_exposure')
-            .select(({ eb }) => [
-              eb.ref('drug_concept_id').as('concept_id'),
-              eb.fn.count('drug_concept_id').as('count'),
-            ])
-            .where('person_id', 'in', (eb) =>
-              eb
-                .selectFrom('snuh_cohort_detail')
-                .select('person_id')
-                .where('cohort_id', '=', id),
-            )
-            .groupBy('drug_concept_id')
-            .orderBy(({ fn }) => fn.count('drug_concept_id'), 'desc')
-            .limit(10)
-            .as('tmp'),
-        )
-        .leftJoin('concept', 'concept.concept_id', 'tmp.concept_id')
-        .select(['concept_name', 'count'])
-        .execute(),
-      getBaseDB() // top 10 condition
-        .selectFrom(
-          getBaseDB()
-            .selectFrom('condition_occurrence')
-            .select(({ eb }) => [
-              eb.ref('condition_concept_id').as('concept_id'),
-              eb.fn.count('condition_concept_id').as('count'),
-            ])
-            .where('person_id', 'in', (eb) =>
-              eb
-                .selectFrom('snuh_cohort_detail')
-                .select('person_id')
-                .where('cohort_id', '=', id),
-            )
-            .groupBy('condition_concept_id')
-            .orderBy(({ fn }) => fn.count('condition_concept_id'), 'desc')
-            .limit(10)
-            .as('tmp'),
-        )
-        .leftJoin('concept', 'concept.concept_id', 'tmp.concept_id')
-        .select(['concept_name', 'count'])
-        .execute(),
-      getBaseDB() // top 10 procedure
-        .selectFrom(
-          getBaseDB()
-            .selectFrom('procedure_occurrence')
-            .select(({ eb }) => [
-              eb.ref('procedure_concept_id').as('concept_id'),
-              eb.fn.count('procedure_concept_id').as('count'),
-            ])
-            .where('person_id', 'in', (eb) =>
-              eb
-                .selectFrom('snuh_cohort_detail')
-                .select('person_id')
-                .where('cohort_id', '=', id),
-            )
-            .groupBy('procedure_concept_id')
-            .orderBy(({ fn }) => fn.count('procedure_concept_id'), 'desc')
-            .limit(10)
-            .as('tmp'),
-        )
-        .leftJoin('concept', 'concept.concept_id', 'tmp.concept_id')
-        .select(['concept_name', 'count'])
-        .execute(),
-      getBaseDB() // top 10 measurement
-        .selectFrom(
-          getBaseDB()
-            .selectFrom('measurement')
-            .select(({ eb }) => [
-              eb.ref('measurement_concept_id').as('concept_id'),
-              eb.fn.count('measurement_concept_id').as('count'),
-            ])
-            .where('person_id', 'in', (eb) =>
-              eb
-                .selectFrom('snuh_cohort_detail')
-                .select('person_id')
-                .where('cohort_id', '=', id),
-            )
-            .groupBy('measurement_concept_id')
-            .orderBy(({ fn }) => fn.count('measurement_concept_id'), 'desc')
-            .limit(10)
-            .as('tmp'),
-        )
-        .leftJoin('concept', 'concept.concept_id', 'tmp.concept_id')
-        .select(['concept_name', 'count'])
-        .execute(),
-    ]);
-
-    const gender: { [concept_name: string]: number } = {};
-    for (const { concept_name, count } of genders) {
-      gender[concept_name ?? 'Unknown'] = Number(count);
-    }
-    age.sort((a, b) => Number(a.age_start) - Number(b.age_start));
-    const age_range: { [age_range: string]: number } = {};
-    for (const { age_start, age_end, count } of age) {
-      age_range[`${age_start}-${age_end}`] = Number(count);
-    }
-    const visitType: { [concept_name: string]: number } = {};
-    for (const { concept_name, count } of visitTypes) {
-      visitType[concept_name ?? 'Unknown Visit Type'] = Number(count);
-    }
-    const visitCount: { [count: string]: number } = {};
-    for (const { cnt, cnt_cnt } of visitCounts) {
-      visitCount[cnt.toString()] = Number(cnt_cnt);
-    }
-    const topTenDrug: { [concept_name: string]: number } = {};
-    for (const { concept_name, count } of topTenDrugs) {
-      topTenDrug[concept_name ?? 'Unknown Drug'] = Number(count);
-    }
-    const topTenCondition: { [concept_name: string]: number } = {};
-    for (const { concept_name, count } of topTenConditions) {
-      topTenCondition[concept_name ?? 'Unknown Condition'] = Number(count);
-    }
-    const topTenProcedure: { [concept_name: string]: number } = {};
-    for (const { concept_name, count } of topTenProcedures) {
-      topTenProcedure[concept_name ?? 'Unknown Procedure'] = Number(count);
-    }
-    const topTenMeasurement: { [concept_name: string]: number } = {};
-    for (const { concept_name, count } of topTenMeasurements) {
-      topTenMeasurement[concept_name ?? 'Unknown Measurement'] = Number(count);
-    }
-
-    return {
-      gender,
-      mortality: {
-        alive: Number(mortality?.alive ?? 0),
-        deceased: Number(mortality?.deceased ?? 0),
-      },
-      age: age_range,
-      visitType,
-      visitCount,
-      topTenDrug,
-      topTenCondition,
-      topTenProcedure,
-      topTenMeasurement,
-    };
-  }
-
-  async getCohort(id: string): Promise<CohortDetailResponse> {
-    const cohort = await getBaseDB()
-      .selectFrom('snuh_cohort')
-      .selectAll()
-      .where('cohort_id', '=', id)
-      .executeTakeFirst();
-
-    if (!cohort) {
-      throw new NotFoundException('Cohort not found.');
-    }
-
-    const count = await getBaseDB()
-      .selectFrom('snuh_cohort_detail')
-      .select(({ fn }) => [fn.count('person_id').as('count')])
-      .where('cohort_id', '=', id)
-      .executeTakeFirst();
-
-    return { ...cohort, count: Number(count?.count || 0) };
-  }
-
-  async getCohortPersons(
-    id: string,
-    page: number = 0,
-    limit: number = 50,
-  ): Promise<CohortPersonsResponse> {
-    const cohort = await getBaseDB()
-      .selectFrom('cohort')
-      .select('cohort_id')
-      .where('cohort_id', '=', id)
-      .executeTakeFirst();
-
-    if (!cohort) {
-      throw new NotFoundException('Cohort not found.');
-    }
-
-    // 특정 코호트에 포함된 person_id 목록을 조회하는 쿼리
-    const personsQuery = getBaseDB()
-      .selectFrom('cohort_detail')
-      .select('person_id')
-      .where('cohort_id', '=', id)
-      .limit(limit)
-      .offset(page * limit);
-
-    // 총 인원 수를 계산하기 위한 쿼리
-    const countQuery = getBaseDB()
-      .selectFrom('cohort_detail')
-      .select(({ fn }) => [fn.count('person_id').as('total')])
-      .where('cohort_id', '=', id);
-
-    // 두 쿼리를 병렬로 실행
-    const [persons, countResult] = await Promise.all([
-      personsQuery.execute(),
-      countQuery.executeTakeFirst(),
-    ]);
-
-    return {
-      persons: persons.map((e) => e.person_id),
-      total: Number(countResult?.total || 0),
-      page,
-      limit,
-    };
-  }
-
-  async createNewCohort(
-    name: string,
-    description: string,
-    cohortDef: Snuh_CohortDefinition,
-    temporary?: boolean,
-  ): Promise<CreateCohortResponse> {
-    let cohortId: string | undefined;
-    if (!temporary) {
-      cohortId = uuidv7();
-      await getBaseDB()
-        .insertInto('snuh_cohort')
-        .values({
-          cohort_id: cohortId,
-          name: name,
-          description: description,
-          cohort_definition: JSON.stringify(cohortDef),
-          author: '00000000-0000-0000-0000-000000000000', // TODO: add author
-          created_at: moment().format('YYYY-MM-DD HH:mm:ss'),
-          updated_at: moment().format('YYYY-MM-DD HH:mm:ss'),
+    const domains = ['conditions', 'drugs', 'measurements', 'procedures'];
+    
+    const results = await Promise.all(
+        domains.map(async (domain) => {
+            let queryResult;
+            switch(domain) {
+                case 'conditions':
+                    queryResult = await this.db.selectFrom('condition_occurrence')
+                        .select(eb => [
+                            eb.fn.count('person_id').distinct().as('participant_count'),
+                            eb.fn.count('condition_concept_id').distinct().as('concept_count')
+                        ])
+                        .where('person_id', 'in', personSubQuery)
+                        .where('condition_concept_id', 'in', conceptSubQuery)
+                        .executeTakeFirstOrThrow();
+                    break;
+                case 'drugs':
+                    queryResult = await this.db.selectFrom('drug_exposure')
+                        .select(eb => [
+                            eb.fn.count('person_id').distinct().as('participant_count'),
+                            eb.fn.count('drug_concept_id').distinct().as('concept_count')
+                        ])
+                        .where('person_id', 'in', personSubQuery)
+                        .where('drug_concept_id', 'in', conceptSubQuery)
+                        .executeTakeFirstOrThrow();
+                    break;
+                case 'measurements':
+                    queryResult = await this.db.selectFrom('measurement')
+                        .select(eb => [
+                            eb.fn.count('person_id').distinct().as('participant_count'),
+                            eb.fn.count('measurement_concept_id').distinct().as('concept_count')
+                        ])
+                        .where('person_id', 'in', personSubQuery)
+                        .where('measurement_concept_id', 'in', conceptSubQuery)
+                        .executeTakeFirstOrThrow();
+                    break;
+                case 'procedures':
+                    queryResult = await this.db.selectFrom('procedure_occurrence')
+                        .select(eb => [
+                            eb.fn.count('person_id').distinct().as('participant_count'),
+                            eb.fn.count('procedure_concept_id').distinct().as('concept_count')
+                        ])
+                        .where('person_id', 'in', personSubQuery)
+                        .where('procedure_concept_id', 'in', conceptSubQuery)
+                        .executeTakeFirstOrThrow();
+                    break;
+                default:
+                    throw new NotFoundException(`Domain '${domain}' not found.`);
+            }
+            return {
+                domain_name: domain,
+                participant_count: Number(queryResult.participant_count),
+                concept_count: Number(queryResult.concept_count),
+            }
         })
-        .execute();
-    }
-
-    let containerCounts: Number[] = [];
-    let finalPatientCount: number = 0;
-    let totalPatients: number = 0;
-    const startTime: number = performance.now();
-    if (cohortDef) {
-      await getBaseDB()
-        .connection()
-        .execute(async (db) => {
-          const queries = buildCreateCohortQuery(db, {
-            cohortId,
-            cohortDef,
-            database: process.env.DB_TYPE,
-          });
-
-          for (let query of queries) {
-            if (!Array.isArray(query)) {
-              query = [query];
-            }
-            try{
-             let results = await Promise.all(query.map((q) => q.execute()));
-              for (let i = 0; i < query.length; i++) {
-                console.log(query[i])
-                if ('select' in query[i]) {
-                  containerCounts = Array(
-                    cohortDef.initialGroup.containers.length +
-                      (cohortDef.comparisonGroup?.containers.length ?? 0),
-                  ).fill(0)
-                  for (const { container_id, count } of results[i] as {
-                    container_id: string;
-                    count: string;
-                  }[]) {
-                    const _count = Number.parseInt(count);
-                    if(container_id === '1') totalPatients = _count;
-                    if(container_id === containerCounts.length.toString()) finalPatientCount = _count;
-                    containerCounts[Number.parseInt(container_id) - 1] = _count;
-                  }
-                }
-              }
-            }
-            catch(err){
-              console.log(err);
-            }
-          }
-        });
-    }
-
-    return {
-      message: 'Cohort successfully created.',
-      cohortId,
-      containerCounts,
-      totalPatients,
-      finalPatientCount,
-      elapsedTime: Math.floor(performance.now() - startTime),
-    };
+    );
+    return results;
   }
 
-  async updateExistingCohort(
-    cohortId: string,
-    name?: string,
-    description?: string,
-    cohortDef?: Snuh_CohortDefinition,
-  ): Promise<UpdateCohortResponse> {
-    const cohort = await getBaseDB()
-      .selectFrom('cohort')
-      .selectAll()
-      .where('cohort_id', '=', cohortId)
-      .executeTakeFirst();
+  /**
+   * 파이프라인 2단계: 특정 도메인의 상위 컨셉 목록 조회
+   */
+  async getTopConceptsForDomain(
+    domain: string,
+    cohortId?: string,
+    viewBy: 'source' | 'target' = 'target',
+    limit: number = 50
+  ) {
+    const personSubQuery = cohortId
+      ? this.db.selectFrom('cohort_detail').select('person_id').where('cohort_id', '=', cohortId)
+      : this.db.selectFrom('person').select('person_id');
 
-    if (!cohort) {
-      throw new NotFoundException('Cohort not found.');
-    }
-
-    await getBaseDB()
-      .updateTable('cohort')
-      .set({
-        name: name ?? cohort.name,
-        description: description ?? cohort.description,
-        cohort_definition: cohortDef
-          ? JSON.stringify(cohortDef)
-          : cohort.cohort_definition,
-        updated_at: moment().format('YYYY-MM-DD HH:mm:ss'),
-      })
-      .where('cohort_id', '=', cohortId)
-      .execute();
-
-    let containerCounts: number[] = [];
-    const startTime: number = performance.now();
-    if (cohortDef) {
-      await getBaseDB()
-        .deleteFrom('cohort_detail')
-        .where('cohort_id', '=', cohortId)
-        .execute();
-
-      await getBaseDB()
-        .connection()
-        .execute(async (db) => {
-          const queries = buildCreateCohortQuery(db, {
-            cohortId,
-            cohortDef,
-            database: process.env.DB_TYPE,
-          });
-
-          for (let query of queries) {
-            if (!Array.isArray(query)) {
-              query = [query];
+    let query: SelectQueryBuilder<any, any, any>;
+    
+    switch (domain) {
+        case 'conditions':
+            if (viewBy === 'source') {
+                query = this.db.selectFrom('condition_occurrence')
+                    .innerJoin('snuh_concept as sc', 'sc.target_concept_id', 'condition_concept_id')
+                    .where('person_id', 'in', personSubQuery)
+                    .groupBy(['sc.source_code', 'sc.source_code_description'])
+                    .select(eb => ['sc.source_code as concept_id', 'sc.source_code_description as concept_name', eb.fn.count('person_id').distinct().as('participant_count')]);
+            } else {
+                const domainCountsQuery = this.db.selectFrom('condition_occurrence')
+                    .innerJoin('concept as con', 'con.concept_id', 'condition_concept_id')
+                    .where('person_id', 'in', personSubQuery)
+                    .where('con.concept_class_id', '=', 'Clinical Finding')
+                    .groupBy('condition_concept_id')
+                    .select(eb => ['condition_concept_id as concept_id', eb.fn.count('person_id').distinct().as('participant_count')]);
+                query = this.db.selectFrom(domainCountsQuery.as('dc')).innerJoin('snuh_concept as sc', 'sc.target_concept_id', 'dc.concept_id').select(['sc.target_concept_name as concept_name', 'dc.participant_count', sql<string>`CAST(dc.concept_id AS String)`.as('concept_id')]);
             }
-            let results = await Promise.all(query.map((q) => q.execute()));
-            for (let i = 0; i < query.length; i++) {
-              if ('select' in query[i]) {
-                containerCounts = Array(
-                  cohortDef.initialGroup.containers.length +
-                    (cohortDef.comparisonGroup?.containers.length ?? 0),
-                ).fill(0);
-
-                for (const { container_id, count } of results[i] as {
-                  container_id: string;
-                  count: string;
-                }[]) {
-                  containerCounts[Number.parseInt(container_id) - 1] =
-                    Number.parseInt(count);
-                }
-              }
+            break;
+        case 'drugs':
+             if (viewBy === 'source') {
+                query = this.db.selectFrom('drug_exposure')
+                    .innerJoin('snuh_concept as sc', 'sc.target_concept_id', 'drug_concept_id')
+                    .where('person_id', 'in', personSubQuery)
+                    .groupBy(['sc.source_code', 'sc.source_code_description'])
+                    .select(eb => ['sc.source_code as concept_id', 'sc.source_code_description as concept_name', eb.fn.count('person_id').distinct().as('participant_count')]);
+            } else {
+                const domainCountsQuery = this.db.selectFrom('drug_exposure')
+                    .innerJoin('concept as con', 'con.concept_id', 'drug_concept_id')
+                    .where('person_id', 'in', personSubQuery)
+                    .groupBy('drug_concept_id')
+                    .select(eb => ['drug_concept_id as concept_id', eb.fn.count('person_id').distinct().as('participant_count')]);
+                query = this.db.selectFrom(domainCountsQuery.as('dc')).innerJoin('snuh_concept as sc', 'sc.target_concept_id', 'dc.concept_id').select(['sc.target_concept_name as concept_name', 'dc.participant_count', sql<string>`CAST(dc.concept_id AS String)`.as('concept_id')]);
             }
-          }
-        });
+            break;
+        case 'measurements':
+             if (viewBy === 'source') {
+                query = this.db.selectFrom('measurement')
+                    .innerJoin('snuh_concept as sc', 'sc.target_concept_id', 'measurement_concept_id')
+                    .where('person_id', 'in', personSubQuery)
+                    .groupBy(['sc.source_code', 'sc.source_code_description'])
+                    .select(eb => ['sc.source_code as concept_id', 'sc.source_code_description as concept_name', eb.fn.count('person_id').distinct().as('participant_count')]);
+            } else {
+                const domainCountsQuery = this.db.selectFrom('measurement')
+                    .innerJoin('concept as con', 'con.concept_id', 'measurement_concept_id')
+                    .where('person_id', 'in', personSubQuery)
+                    .groupBy('measurement_concept_id')
+                    .select(eb => ['measurement_concept_id as concept_id', eb.fn.count('person_id').distinct().as('participant_count')]);
+                query = this.db.selectFrom(domainCountsQuery.as('dc')).innerJoin('snuh_concept as sc', 'sc.target_concept_id', 'dc.concept_id').select(['sc.target_concept_name as concept_name', 'dc.participant_count', sql<string>`CAST(dc.concept_id AS String)`.as('concept_id')]);
+            }
+            break;
+        case 'procedures':
+             if (viewBy === 'source') {
+                query = this.db.selectFrom('procedure_occurrence')
+                    .innerJoin('snuh_concept as sc', 'sc.target_concept_id', 'procedure_concept_id')
+                    .where('person_id', 'in', personSubQuery)
+                    .groupBy(['sc.source_code', 'sc.source_code_description'])
+                    .select(eb => ['sc.source_code as concept_id', 'sc.source_code_description as concept_name', eb.fn.count('person_id').distinct().as('participant_count')]);
+            } else {
+                const domainCountsQuery = this.db.selectFrom('procedure_occurrence')
+                    .innerJoin('concept as con', 'con.concept_id', 'procedure_concept_id')
+                    .where('person_id', 'in', personSubQuery)
+                    .groupBy('procedure_concept_id')
+                    .select(eb => ['procedure_concept_id as concept_id', eb.fn.count('person_id').distinct().as('participant_count')]);
+                query = this.db.selectFrom(domainCountsQuery.as('dc')).innerJoin('snuh_concept as sc', 'sc.target_concept_id', 'dc.concept_id').select(['sc.target_concept_name as concept_name', 'dc.participant_count', sql<string>`CAST(dc.concept_id AS String)`.as('concept_id')]);
+            }
+            break;
+        default:
+             throw new NotFoundException(`Domain '${domain}' not found.`);
     }
-
-    return {
-      message: 'Cohort successfully updated.',
-      cohortId,
-      containerCounts,
-      elapsedTime: Math.floor(performance.now() - startTime),
-    };
+    
+    const result = await query.orderBy('participant_count', 'desc').orderBy('concept_name', 'asc').limit(limit).execute();
+    return result.map((row: any) => ({ ...row, participant_count: Number(row.participant_count) }));
   }
 
-  async removeExistingCohort(id: string): Promise<DeleteCohortResponse> {
-    const cohort = await getBaseDB()
-      .selectFrom('cohort')
-      .selectAll()
-      .where('cohort_id', '=', id)
+  /**
+   * 파이프라인 3단계: 특정 컨셉의 상세 인구통계 조회
+   */
+  async getConceptDetails(domain: string, conceptId: string, cohortId?: string) {
+    const { dateColumn } = this.getDomainInfo(domain);
+
+    const conceptNameResult = await this.db.selectFrom('snuh_concept')
+      .select('target_concept_name')
+      .where('target_concept_id', '=', conceptId)
       .executeTakeFirst();
 
-    if (!cohort) {
-      throw new NotFoundException('Cohort not found.');
+    if (!conceptNameResult) {
+      throw new NotFoundException(`Concept ID ${conceptId} not found.`);
     }
 
-    await getBaseDB()
-      .deleteFrom('cohort_detail')
-      .where('cohort_id', '=', id)
-      .execute();
+    let ageDataPromise, sexDataPromise;
 
-    await getBaseDB()
-      .deleteFrom('cohort_concept')
-      .where('cohort_id', '=', id)
-      .execute();
+    switch (domain) {
+      case 'conditions': {
+        let baseQuery = this.db.selectFrom('condition_occurrence').selectAll().where('condition_concept_id', '=', conceptId);
+        if (cohortId) { baseQuery = baseQuery.where('person_id', 'in', this.db.selectFrom('cohort_detail').select('person_id').where('cohort_id', '=', cohortId)); }
+        ageDataPromise = this.db.selectFrom(baseQuery.as('domain_table')).innerJoin('person as p', 'p.person_id', 'domain_table.person_id').select(eb => [eb.fn('floor', [eb(eb(eb.fn('year', [sql.ref(`domain_table.${dateColumn}`)]), '-', eb.ref('p.year_of_birth')), '/', 10)]).as('age_group_floor'), eb.fn.count('p.person_id').distinct().as('count')]).groupBy('age_group_floor').orderBy('age_group_floor').execute();
+        sexDataPromise = this.db.selectFrom(baseQuery.as('domain_table')).innerJoin('person as p', 'p.person_id', 'domain_table.person_id').innerJoin('concept as c', 'c.concept_id', 'p.gender_concept_id').select(['c.concept_name as gender', eb => eb.fn.count('p.person_id').distinct().as('count')]).groupBy('gender').execute();
+        break;
+      }
+      case 'drugs': {
+        let baseQuery = this.db.selectFrom('drug_exposure').selectAll().where('drug_concept_id', '=', conceptId);
+        if (cohortId) { baseQuery = baseQuery.where('person_id', 'in', this.db.selectFrom('cohort_detail').select('person_id').where('cohort_id', '=', cohortId)); }
+        ageDataPromise = this.db.selectFrom(baseQuery.as('domain_table')).innerJoin('person as p', 'p.person_id', 'domain_table.person_id').select(eb => [eb.fn('floor', [eb(eb(eb.fn('year', [sql.ref(`domain_table.${dateColumn}`)]), '-', eb.ref('p.year_of_birth')), '/', 10)]).as('age_group_floor'), eb.fn.count('p.person_id').distinct().as('count')]).groupBy('age_group_floor').orderBy('age_group_floor').execute();
+        sexDataPromise = this.db.selectFrom(baseQuery.as('domain_table')).innerJoin('person as p', 'p.person_id', 'domain_table.person_id').innerJoin('concept as c', 'c.concept_id', 'p.gender_concept_id').select(['c.concept_name as gender', eb => eb.fn.count('p.person_id').distinct().as('count')]).groupBy('gender').execute();
+        break;
+      }
+      case 'measurements': {
+        let baseQuery = this.db.selectFrom('measurement').selectAll().where('measurement_concept_id', '=', conceptId);
+        if (cohortId) { baseQuery = baseQuery.where('person_id', 'in', this.db.selectFrom('cohort_detail').select('person_id').where('cohort_id', '=', cohortId)); }
+        ageDataPromise = this.db.selectFrom(baseQuery.as('domain_table')).innerJoin('person as p', 'p.person_id', 'domain_table.person_id').select(eb => [eb.fn('floor', [eb(eb(eb.fn('year', [sql.ref(`domain_table.${dateColumn}`)]), '-', eb.ref('p.year_of_birth')), '/', 10)]).as('age_group_floor'), eb.fn.count('p.person_id').distinct().as('count')]).groupBy('age_group_floor').orderBy('age_group_floor').execute();
+        sexDataPromise = this.db.selectFrom(baseQuery.as('domain_table')).innerJoin('person as p', 'p.person_id', 'domain_table.person_id').innerJoin('concept as c', 'c.concept_id', 'p.gender_concept_id').select(['c.concept_name as gender', eb => eb.fn.count('p.person_id').distinct().as('count')]).groupBy('gender').execute();
+        break;
+      }
+      case 'procedures': {
+        let baseQuery = this.db.selectFrom('procedure_occurrence').selectAll().where('procedure_concept_id', '=', conceptId);
+        if (cohortId) { baseQuery = baseQuery.where('person_id', 'in', this.db.selectFrom('cohort_detail').select('person_id').where('cohort_id', '=', cohortId)); }
+        ageDataPromise = this.db.selectFrom(baseQuery.as('domain_table')).innerJoin('person as p', 'p.person_id', 'domain_table.person_id').select(eb => [eb.fn('floor', [eb(eb(eb.fn('year', [sql.ref(`domain_table.${dateColumn}`)]), '-', eb.ref('p.year_of_birth')), '/', 10)]).as('age_group_floor'), eb.fn.count('p.person_id').distinct().as('count')]).groupBy('age_group_floor').orderBy('age_group_floor').execute();
+        sexDataPromise = this.db.selectFrom(baseQuery.as('domain_table')).innerJoin('person as p', 'p.person_id', 'domain_table.person_id').innerJoin('concept as c', 'c.concept_id', 'p.gender_concept_id').select(['c.concept_name as gender', eb => eb.fn.count('p.person_id').distinct().as('count')]).groupBy('gender').execute();
+        break;
+      }
+      default:
+        throw new NotFoundException(`Domain '${domain}' not found.`);
+    }
 
-    await getBaseDB()
-      .deleteFrom('cohort')
-      .where('cohort_id', '=', id)
-      .execute();
+    const [ageData, sexData] = await Promise.all([ageDataPromise, sexDataPromise]);
+
+    const age = ageData.reduce((acc, row: any) => {
+        const startAge = Number(row.age_group_floor) * 10;
+        if (startAge >= 0 && startAge < 200) { acc[`${startAge}-${startAge + 9}`] = Number(row.count); }
+        return acc;
+    }, {});
+    const sex = sexData.reduce((acc, row: any) => { acc[row.gender] = Number(row.count); return acc; }, {});
 
     return {
-      message: 'Cohort successfully deleted.',
+      conceptId,
+      conceptName: conceptNameResult.target_concept_name,
+      demographics: { age, sex },
     };
   }
+  
+  /**
+   * Measurement 측정 컨셉의 값 분포 통계 조회
+   */
+  async getConceptValueDistribution(measurementConceptId: string) {
+    const query = sql<any>`
+        WITH
+            base_data AS (SELECT m.person_id, m.value_as_number, p.gender_concept_id, coalesce(m.unit_concept_id, -1) AS unit_concept_id FROM measurement AS m INNER JOIN person AS p ON p.person_id = m.person_id WHERE m.measurement_concept_id = ${sql.val(measurementConceptId)} AND m.value_as_number IS NOT NULL),
+            unit_boundaries AS (SELECT unit_concept_id, quantile(0.05)(value_as_number) AS p05_value, quantile(0.95)(value_as_number) AS p95_value, GREATEST(round((p95_value - p05_value) / 10), 1) AS dynamic_bin_size FROM base_data GROUP BY unit_concept_id),
+            gender_totals_per_unit AS (SELECT unit_concept_id, gender_concept_id, count(DISTINCT person_id) AS total_gender_count FROM base_data GROUP BY unit_concept_id, gender_concept_id),
+            labeled_data AS (SELECT bd.person_id, bd.unit_concept_id, bd.gender_concept_id, CASE WHEN bd.value_as_number < ub.p05_value THEN concat('< ', toString(round(ub.p05_value, 1))) WHEN bd.value_as_number >= ub.p95_value THEN concat('>= ', toString(round(ub.p95_value, 1))) ELSE concat(toString(round(ub.p05_value + floor((bd.value_as_number - ub.p05_value) / ub.dynamic_bin_size) * ub.dynamic_bin_size, 1)), ' - ', toString(round(LEAST(ub.p05_value + floor((bd.value_as_number - ub.p05_value) / ub.dynamic_bin_size) * ub.dynamic_bin_size + ub.dynamic_bin_size - 0.1, ub.p95_value), 1))) END AS range_label, CASE WHEN bd.value_as_number < ub.p05_value THEN -1 WHEN bd.value_as_number >= ub.p95_value THEN 99999 ELSE ub.p05_value + floor((bd.value_as_number - ub.p05_value) / ub.dynamic_bin_size) * ub.dynamic_bin_size END AS sort_order FROM base_data AS bd INNER JOIN unit_boundaries AS ub ON bd.unit_concept_id = ub.unit_concept_id)
+        SELECT unit_concept.concept_name AS unit_name, gender_concept.concept_name AS gender_name, any(gt.total_gender_count) AS total_gender_count, ld.range_label, count(DISTINCT ld.person_id) AS participant_count, any(ld.sort_order) AS sort_order FROM labeled_data AS ld INNER JOIN gender_totals_per_unit AS gt ON ld.unit_concept_id = gt.unit_concept_id AND ld.gender_concept_id = gt.gender_concept_id LEFT JOIN concept AS unit_concept ON ld.unit_concept_id = unit_concept.concept_id INNER JOIN concept AS gender_concept ON ld.gender_concept_id = gender_concept.concept_id GROUP BY unit_name, gender_name, ld.range_label ORDER BY unit_name, gender_name, sort_order;
+    `;
 
-  async isCohortNameDuplicate(cohortName: string): Promise<boolean> {
-    const cohort = await getBaseDB()
-      .selectFrom('snuh_cohort')
-      .select('name')
-      .where('name', 'like', cohortName)
-      .executeTakeFirst();
+    const result = await query.execute(this.db);
+    return (result.rows).map(row => ({
+        ...row,
+        total_gender_count: Number(row.total_gender_count),
+        participant_count: Number(row.participant_count),
+        sort_order: Number(row.sort_order)
+    }));
+  }
 
-    return !!cohort;
+  private getDomainInfo(domain: string) {
+    switch (domain.toLowerCase()) {
+      case 'conditions': return { tableName: 'condition_occurrence', conceptColumn: 'condition_concept_id', dateColumn: 'condition_start_date' };
+      case 'drugs': return { tableName: 'drug_exposure', conceptColumn: 'drug_concept_id', dateColumn: 'drug_exposure_start_date' };
+      case 'measurements': return { tableName: 'measurement', conceptColumn: 'measurement_concept_id', dateColumn: 'measurement_date' };
+      case 'procedures': return { tableName: 'procedure_occurrence', conceptColumn: 'procedure_concept_id', dateColumn: 'procedure_date' };
+      default: throw new NotFoundException(`Domain '${domain}' not found.`);
+    }
   }
 }
