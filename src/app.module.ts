@@ -11,12 +11,12 @@ import * as dotenv from 'dotenv';
 import { User } from 'src/user/user.entity';
 import { SettingModule } from './setting/setting.module';
 import { TextSearchModule } from './text-search/text-search.module';
-
+import { DataBrowserModule } from './data-browser/data-browser.module';
 dotenv.config();
 
 @Module({
   imports: [
-    PersonModule, ConceptModule, CohortModule, UserModule, AuthModule, SettingModule,
+    DataBrowserModule, PersonModule, ConceptModule, CohortModule, UserModule, AuthModule, SettingModule,
     TypeOrmModule.forRoot({
       type: 'postgres',
       host: process.env.ATLAS_DB_HOST || 'localhost',
